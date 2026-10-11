@@ -1,0 +1,173 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PRCF DIGITAL | QR Scanner</title>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      background: #101827;
+      color: white;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    header {
+      background: #19263a;
+      padding: 24px 15px;
+      border-bottom: 3px solid #dc3545;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      color: #b9c5d6;
+      font-size: 14px;
+    }
+
+    main {
+      max-width: 500px;
+      margin: 25px auto;
+      padding: 15px;
+    }
+
+    #reader {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 12px;
+      background: #000;
+    }
+
+    button {
+      width: 100%;
+      padding: 16px;
+      margin: 10px 0;
+      border: 0;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .start {
+      background: #22c55e;
+      color: #08140b;
+    }
+
+    .stop {
+      background: #dc3545;
+      color: white;
+    }
+
+    .result {
+      background: #1c2b41;
+      padding: 18px;
+      margin-top: 20px;
+      border-radius: 10px;
+      overflow-wrap: anywhere;
+    }
+
+    #status {
+      color: #facc15;
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>PRCF DIGITAL</h1>
+    <div class="subtitle">QR SCANNER | CAMERA TEST</div>
+  </header>
+
+  <main>
+    <p>Prueba de lectura QR mediante cámara</p>
+
+    <div id="reader"></div>
+
+    <button class="start" onclick="startScanner()">
+      ESCANEAR CON CÁMARA
+    </button>
+
+    <button class="stop" onclick="stopScanner()">
+      DETENER CÁMARA
+    </button>
+
+    <div class="result">
+      <p id="status">Cámara sin iniciar</p>
+      <strong>Última lectura:</strong>
+      <p id="result">Ninguna</p>
+    </div>
+  </main>
+
+  <script>
+    let scanner = null;
+    let running = false;
+    let starting = false;
+
+    const statusEl = document.getElementById("status");
+    const resultEl = document.getElementById("result");
+
+    async function startScanner() {
+      if (running || starting) return;
+
+      if (typeof Html5Qrcode === "undefined") {
+        statusEl.textContent =
+          "Error: no se cargó la biblioteca QR.";
+        return;
+      }
+
+      starting = true;
+      statusEl.textContent = "Solicitando cámara...";
+
+      try {
+        scanner = new Html5Qrcode("reader");
+
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 220, height: 220 }
+          },
+          function(decodedText) {
+            resultEl.textContent = decodedText;
+            statusEl.textContent = "QR leído correctamente";
+          },
+          function() {}
+        );
+
+        running = true;
+        statusEl.textContent = "Cámara activa";
+      } catch (error) {
+        statusEl.textContent =
+          "Error: " + (error?.message || String(error));
+
+        console.error("PRCF CAMERA ERROR:", error);
+      } finally {
+        starting = false;
+      }
+    }
+
+    async function stopScanner() {
+      if (!scanner || !running) return;
+
+      try {
+        await scanner.stop();
+        running = false;
+        statusEl.textContent = "Cámara detenida";
+      } catch (error) {
+        statusEl.textContent =
+          "Error al detener: " + String(error);
+      }
+    }
+  </script>
+</body>
+</html>
