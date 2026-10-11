@@ -1,173 +1,108 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PRCF DIGITAL | QR Scanner</title>
-
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-
   <style>
-    body {
-      margin: 0;
-      background: #101827;
-      color: white;
-      font-family: Arial, sans-serif;
-      text-align: center;
-    }
-
-    header {
-      background: #19263a;
-      padding: 24px 15px;
-      border-bottom: 3px solid #dc3545;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: 26px;
-    }
-
-    .subtitle {
-      margin-top: 8px;
-      color: #b9c5d6;
-      font-size: 14px;
-    }
-
-    main {
-      max-width: 500px;
-      margin: 25px auto;
-      padding: 15px;
-    }
-
-    #reader {
-      width: 100%;
-      overflow: hidden;
-      border-radius: 12px;
-      background: #000;
-    }
-
-    button {
-      width: 100%;
-      padding: 16px;
-      margin: 10px 0;
-      border: 0;
-      border-radius: 10px;
-      font-size: 16px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    .start {
-      background: #22c55e;
-      color: #08140b;
-    }
-
-    .stop {
-      background: #dc3545;
-      color: white;
-    }
-
-    .result {
-      background: #1c2b41;
-      padding: 18px;
-      margin-top: 20px;
-      border-radius: 10px;
-      overflow-wrap: anywhere;
-    }
-
-    #status {
-      color: #facc15;
-    }
+    body{margin:0;background:#101827;color:white;font-family:Arial,sans-serif;text-align:center}
+    header{background:#19263a;padding:24px 15px;border-bottom:3px solid #dc3545}
+    h1{margin:0;font-size:26px}.subtitle{margin-top:8px;color:#b9c5d6;font-size:14px}
+    main{max-width:500px;margin:25px auto;padding:15px}
+    #reader{width:100%;overflow:hidden;border-radius:12px;background:#000}
+    button{width:100%;padding:16px;margin:10px 0;border:0;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer}
+    .start{background:#22c55e;color:#08140b}.stop{background:#dc3545;color:white}
+    .result{background:#1c2b41;padding:18px;margin-top:20px;border-radius:10px;overflow-wrap:anywhere}
+    #status{color:#facc15}
   </style>
 </head>
-
 <body>
-  <header>
-    <h1>PRCF DIGITAL</h1>
-    <div class="subtitle">QR SCANNER | CAMERA TEST</div>
-  </header>
-
+  <header><h1>PRCF DIGITAL</h1><div class="subtitle">QR SCANNER | PORTAL DE REGISTRO</div></header>
   <main>
-    <p>Prueba de lectura QR mediante cámara</p>
-
+    <p>Apunta la cámara al código QR de la credencial.</p>
     <div id="reader"></div>
-
-    <button class="start" onclick="startScanner()">
-      ESCANEAR CON CÁMARA
-    </button>
-
-    <button class="stop" onclick="stopScanner()">
-      DETENER CÁMARA
-    </button>
-
+    <button class="start" onclick="startScanner()">ESCANEAR CON CÁMARA</button>
+    <button class="stop" onclick="stopScanner()">DETENER CÁMARA</button>
     <div class="result">
-      <p id="status">Cámara sin iniciar</p>
-      <strong>Última lectura:</strong>
-      <p id="result">Ninguna</p>
+      <p id="status">Preparando cámara...</p>
+      <strong>Última lectura:</strong><p id="result">Ninguna</p>
+      <button id="copyBtn" class="start" style="display:none" onclick="copyResult()">COPIAR LECTURA (SI NO REGRESA AUTOMÁTICAMENTE)</button>
     </div>
   </main>
-
   <script>
     let scanner = null;
     let running = false;
     let starting = false;
-
-    const statusEl = document.getElementById("status");
-    const resultEl = document.getElementById("result");
+    let finished = false;
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const params = new URLSearchParams(location.search);
+    const origin = params.get('origin') || '';
+    const nonce = params.get('nonce') || '';
+    // Solo enviar al portal de Google Apps Script que abrió esta pestaña.
+    const trustedOrigin = /^https:\/\/[a-z0-9-]+\.(googleusercontent\.com|google\.com)$/i.test(origin);
+    const nonceValid = /^[a-f0-9]{32}$/i.test(nonce);
+    let lastResult = '';
 
     async function startScanner() {
-      if (running || starting) return;
-
-      if (typeof Html5Qrcode === "undefined") {
-        statusEl.textContent =
-          "Error: no se cargó la biblioteca QR.";
+      if (running || starting || finished) return;
+      if (typeof Html5Qrcode === 'undefined') {
+        statusEl.textContent = 'Error: no se cargó la biblioteca QR.';
         return;
       }
-
       starting = true;
-      statusEl.textContent = "Solicitando cámara...";
-
+      statusEl.textContent = 'Solicitando cámara...';
       try {
-        scanner = new Html5Qrcode("reader");
-
+        scanner = new Html5Qrcode('reader');
         await scanner.start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: { width: 220, height: 220 }
+          {facingMode:'environment'},
+          {fps:10,qrbox:{width:220,height:220}},
+          async function(decodedText) {
+            if (finished) return;
+            finished = true;
+            lastResult = String(decodedText || '').trim();
+            resultEl.textContent = lastResult;
+            document.getElementById('copyBtn').style.display = 'block';
+            statusEl.textContent = 'QR leído. Enviando al portal PRCF...';
+            await stopScanner();
+            if (window.opener && trustedOrigin && nonceValid) {
+              try {
+                window.opener.postMessage(
+                  {type:'PRCF_QR_RESULT',nonce:nonce,qr:lastResult}, origin
+                );
+                statusEl.textContent = 'Lectura enviada. Regresa al portal PRCF.';
+                // La pestaña puede cerrarse solo si el navegador lo permite.
+                setTimeout(function(){ window.close(); }, 700);
+              } catch (err) {
+                statusEl.textContent = 'No se pudo devolver la lectura automáticamente. Cópiala y regresa al portal.';
+              }
+            } else {
+              statusEl.textContent = 'Copia la lectura y regresa al portal PRCF.';
+            }
           },
-          function(decodedText) {
-            resultEl.textContent = decodedText;
-            statusEl.textContent = "QR leído correctamente";
-          },
-          function() {}
+          function(){}
         );
-
         running = true;
-        statusEl.textContent = "Cámara activa";
+        if (!finished) statusEl.textContent = 'Cámara activa';
       } catch (error) {
-        statusEl.textContent =
-          "Error: " + (error?.message || String(error));
-
-        console.error("PRCF CAMERA ERROR:", error);
-      } finally {
-        starting = false;
-      }
+        statusEl.textContent = 'Error: ' + (error && error.message ? error.message : String(error));
+      } finally { starting = false; }
     }
-
     async function stopScanner() {
-      if (!scanner || !running) return;
-
+      if (!scanner) return;
       try {
-        await scanner.stop();
+        if (running || scanner.getState() === 2 || scanner.getState() === 3) await scanner.stop();
         running = false;
-        statusEl.textContent = "Cámara detenida";
-      } catch (error) {
-        statusEl.textContent =
-          "Error al detener: " + String(error);
-      }
+        statusEl.textContent = finished ? statusEl.textContent : 'Cámara detenida';
+      } catch (error) { statusEl.textContent = 'Error al detener: ' + String(error); }
     }
+    async function copyResult() {
+      try { await navigator.clipboard.writeText(lastResult); statusEl.textContent = 'Lectura copiada. Regresa al portal PRCF y pégala.'; }
+      catch (e) { statusEl.textContent = 'Selecciona y copia manualmente la lectura mostrada.'; }
+    }
+    // La cámara se inicia al abrir el lector; algunos navegadores exigirán un toque.
+    window.addEventListener('load', function(){ startScanner(); });
   </script>
 </body>
 </html>
